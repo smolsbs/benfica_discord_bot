@@ -1,31 +1,35 @@
-import configparser
 import datetime
+import json
+import os
 
-from os import getcwd
 from selenium import webdriver
 
-CONFIG_PATH = f"{getcwd()}/discord.conf"
-CONFIG = configparser.ConfigParser()
+DB_FILE = f"{os.path.realpath(os.path.dirname(__file__))}/../match.json"
 
-def read_conf(section=None) -> dict:
-    config = CONFIG.read(CONFIG_PATH)
-    if section:
-        try:
-            return config[section]
-        except KeyError:
-            print('No key found, returning full config instead')
-    return config
 
-def write_conf(data: dict) -> None:
-    for section, sub_section in data.items():
-        if not CONFIG.has_section(section):
-            CONFIG.add_section(section)
-        
-        for k, v in sub_section.items():
-            CONFIG.set(section, str(k), str(v))
+def read_config() -> dict:
+    try:
+        fp = open(DB_FILE, 'r', encoding='utf-8')
+    except FileNotFoundError:
+        return None
+    
+    cfg = json.load(fp)
+    fp.close()
+    return cfg
 
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as fp:
-        CONFIG.write(fp)
+def write_config(data: dict) -> bool:
+    with open(DB_FILE, 'w', encoding='utf-8') as fp:
+        serial_json = json.dumps(data)
+        fp.write(serial_json)
+    
+    return True
+
+
+def sanitize_str(_str: str) -> str:
+    aux = _str.lower()
+    aux = aux.replace(' ', '_').replace('.', '')
+
+    return aux
 
 
 def spawn_driver() -> webdriver.Firefox:
