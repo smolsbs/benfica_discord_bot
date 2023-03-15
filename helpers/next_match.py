@@ -1,6 +1,5 @@
 # imports
 from datetime import datetime, timedelta
-from pprint import pprint
 import pendulum
 
 from selenium.webdriver.common.by import By
@@ -69,16 +68,10 @@ def get_next_match() -> datetime:
         'minute': str(match_date.minute)
         }
     }
-    pprint(info)
-
     browser.quit()
 
-    return
+    return utils.write_config(info)
 
-
-    utils.write_conf(info)
-
-get_next_match()
 
 def fetch_config_next_match() -> datetime:
     cfg = utils.read_conf('next_match')
