@@ -1,13 +1,13 @@
 # imports
 from datetime import datetime, timedelta
-import pendulum
 
-from selenium.webdriver.common.by import By
+import requests
+from bs4 import BeautifulSoup
 
 from helpers import utils
 
 # Global vars
-URL = 'https://www.slbenfica.pt/pt-pt/futebol/calendario'
+URL = 'https://www.slbenfica.pt/api/sitecore/Calendar/CalendarEvents'
 TZ = 'Europe/Lisbon'
 WEEKDAY = {
     1: 'Segunda-feira',
@@ -19,56 +19,57 @@ WEEKDAY = {
     7: 'Domingo'
 }
 
+H = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/111.0",
+     'Accept-Encoding': 'gzip, deflate, br',
+     'Referer': 'https://www.slbenfica.pt/pt-pt/futebol/calendario',
+     'Content-Type': 'application/json'}
+
+DATA = "{\"filters\":{\"Menu\":\"next\",\"Modality\":\"{ECCFEB41-A0FD-4830-A3BB-7E57A0A15D00}\",\"IsMaleTeam\":true,\"Rank\":\"16094ecf-9e78-4e3e-bcdf-28e4f765de9f\",\"Tournaments\":[\"dp:tournament:50d243c9-fee7-4b34-bdcc-22bf446935eb\",\"sr:tournament:853\",\"sr:tournament:7\",\"sr:tournament:238\",\"sr:tournament:327\",\"sr:tournament:336\"],\"Seasons\":[\"2022/23\"],\"PageNumber\":0}}"
+
 # Functions
-def get_next_match() -> datetime:
-    browser = utils.spawn_driver()
-    browser.get(URL)
-    browser.implicitly_wait(2.5)    # wait for browser to load all elements
 
-    main_div = browser.find_element(By.CLASS_NAME, 'calendar-item')
 
-    # tv channel and competition
-    tv_div = main_div.find_element(By.CLASS_NAME, 'calendar-live-channels')
-    tv_channel = tv_div.find_element(
-        By.TAG_NAME, 'img').get_attribute('src').split('/')[-1]
+def req_get_next_match() -> datetime:
+    s = requests.Session()
 
-    competition = main_div.find_element(
-        By.CLASS_NAME, 'calendar-competition').get_attribute("textContent")
+    conts = s.request('POST', URL, headers=H, data=DATA)
 
-    # teams 
-    home_div = main_div.find_element(By.CLASS_NAME, 'home-team')
-    home_team = home_div.find_element(
-        By.CLASS_NAME, 'calendar-item-team-name').get_attribute("textContent")
-    
-    away_div = main_div.find_element(By.CLASS_NAME, 'away-team')
-    away_team = away_div.find_element(
-        By.CLASS_NAME, 'calendar-item-team-name').get_attribute("textContent")
+    soup = BeautifulSoup(conts.content, 'html.parser')
 
-    # date and stadium info
-    next_match_div = main_div.find_element(
-        By.CLASS_NAME, 'calendar-match-info')
-    next_match_date = next_match_div.find_element(
-        By.CLASS_NAME, 'startDateForCalendar').get_attribute("textContent")
-    stadium = next_match_div.find_element(
-        By.CLASS_NAME, 'locationForCalendar').get_attribute("textContent")
+    match_div = soup.find('div', {'class': 'calendar-item'})
 
-    match_date = datetime.strptime(next_match_date, r"%m/%d/%Y %I:%M:%S %p")
+    loc = match_div.find(
+        'div', {'class': 'calendar-match-location'}).text
+    canal = match_div.find(
+        'div', {'class': 'calendar-live-channels'}).text.strip()
+    comp = match_div.find(
+        'div', {'class': 'calendar-competition'}).text
 
+    s_date = match_div.find('div', {'class': 'startDateForCalendar'}).text
+    match_date = datetime.strptime(s_date, r"%m/%d/%Y %I:%M:%S %p")
+
+    home = match_div.find(
+        'div', {'class': 'home-team'}).text.strip()
+    away = match_div.find(
+        'div', {'class': 'away-team'}).text.strip()
+
+
+    if canal == "":
+        canal = 'N/A'
 
     info = {'next_match': {
-        'tv': tv_channel,
-        'competition': competition,
-        'stadium': stadium,
-        'homeTeam': home_team,
-        'awayTeam': away_team,
+        'tv': canal,
+        'competition': comp,
+        'stadium': loc,
+        'homeTeam': home,
+        'awayTeam': away,
         'year': str(match_date.year),
         'month': str(match_date.month),
         'day': str(match_date.day),
         'hour': str(match_date.hour),
         'minute': str(match_date.minute)
-        }
     }
-    browser.quit()
+    }
 
     return utils.write_config(info)
 
@@ -88,8 +89,7 @@ def fetch_config_next_match() -> datetime:
 
 def how_long_until() -> str:
     match_date = fetch_config_next_match()
-    tz_diff = (pendulum.today() - pendulum.today(TZ)).total_hours()
-    local_time = datetime.now() + timedelta(hours=int(tz_diff))
+    local_time = datetime.now()
 
     if local_time > match_date:
         if match_date + timedelta(hours=2) > local_time:
@@ -112,3 +112,5 @@ def how_long_until() -> str:
 
     sentence += ' para ver o Glorioso de novo! <:slb:240116451782950914>'
     return sentence
+
+
