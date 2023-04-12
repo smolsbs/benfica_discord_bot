@@ -7,10 +7,14 @@ import requests
 from bs4 import BeautifulSoup, element
 from PIL import Image
 
+
 def _get_pictures() -> element.ResultSet:
     # Grab html
-    r = requests.get('https://24.sapo.pt/jornais/desporto')
-
+    r = requests.get('https://24.sapo.pt/jornais/desporto', timeout=5.0)
+    try:
+        r.raise_for_status()
+    except requests.HTTPError:
+        return r.status_code
     # Parse to something edible
     soup = BeautifulSoup(r.content, features='html.parser')
 
@@ -36,6 +40,8 @@ def sports_covers():
     jornais = ('A Bola', 'O Jogo', 'Record')
 
     pictures = _get_pictures()
+    if isinstance(pictures, int):
+        return pictures
 
     covers = _filter_pictures(pictures, jornais)
 
@@ -51,27 +57,27 @@ def create_collage(_urls: list[str]) -> str:
         images.append(aux)
         if aux.width > max_width:
             max_width = aux.width
-    
+
     # scale the smaller images to all have the same width
     max_height = 0
-    for i,img in enumerate(images):
+    for i, img in enumerate(images):
         w, h = images[i].size
         if w == max_width:
             continue
         new_h = (h*max_width) // w
-        images[i] = images[i].resize( (max_width, new_h), Image.Resampling.BICUBIC)
+        images[i] = images[i].resize(
+            (max_width, new_h), Image.Resampling.BICUBIC)
 
         if images[i].height > max_height:
             max_height = images[i].height
 
     # create the blank collage, with dimentions being 3*width and the biggest height of
     # the three images
-    
-    collage = Image.new('RGB', (3*max_width, max_height), "#FFF" )
-    
+
+    collage = Image.new('RGB', (3*max_width, max_height), "#FFF")
+
     for i, img in enumerate(images):
-        collage.paste(img, (max_width*i,0))
-    
+        collage.paste(img, (max_width*i, 0))
 
     if platform == 'win32':
         _path = f"{getenv('TMP')}\\collage.jpg"
@@ -81,4 +87,3 @@ def create_collage(_urls: list[str]) -> str:
     collage.save(_path, 'JPEG')
 
     return _path
-
