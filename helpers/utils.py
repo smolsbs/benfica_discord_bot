@@ -41,7 +41,6 @@ def spawn_driver() -> webdriver.Firefox:
     return driver
 
 
-
 def create_date_sentence(_time: datetime.timedelta) -> list[str]:
     final_str = []
 
