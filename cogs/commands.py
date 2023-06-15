@@ -28,9 +28,10 @@ class Comandos(commands.Cog, name="comandos"):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.cooldown(1, 300.0)
     @commands.hybrid_command(
         name='capas',
-        description='Busca as capas do dia'
+        description='Busca as capas desportivas do dia'
     )
     async def capas(self, context: Context):
         await context.defer()
@@ -38,7 +39,7 @@ class Comandos(commands.Cog, name="comandos"):
         if isinstance(_path, int):
             self.bot.logger.info(f'capas returned a Status Code {_path}')
             emb = Embed(color=FAIL_COLOR)
-            emb.add_field(name='Estado', value="Erro ao buscar as capas.")
+            emb.add_field(name='', value="Erro ao buscar as capas!")
             await context.reply(embed=emb)
             return
         with open(_path, 'rb') as fp:
@@ -47,41 +48,55 @@ class Comandos(commands.Cog, name="comandos"):
 
     @tasks.loop(hours=24)
     async def atc_info(self):
-        status = next_match.get_next_match()
+        status = next_match.req_get_next_match()
         if not status:
             self.bot.logger.info("Erro ao buscar a info do próximo jogo.")
 
+    @commands.has_permissions(administrator=True)
     @commands.hybrid_command(
         name='atualizar_info',
         description='busca nova info de jogo')
     async def atualizar_info(self, context: Context):
-        temp = await context.send('Processando o comando...')
-        status = next_match.get_next_match()
+        await context.defer()
+        status = next_match.req_get_next_match()
         if status:
             _color = SUCCESS_COLOR
-            _ret = 'Informação atualizada com sucesso'
+            _ret = f'Informação atualizada com sucesso!\n{status}'
         else:
             _color = FAIL_COLOR
-            _ret = 'Atualização da informação não foi atualizada devido a um erro'
+            _ret = 'Atualização da informação não foi atualizada devido a um erro!'
 
         emb = Embed(color=_color)
-        emb.add_field(name='Estado', value=_ret)
-        await temp.delete()
-        await context.send(embed=emb)
+        emb.add_field(name='', value=_ret)
+        await context.reply(embed=emb)
 
+    @commands.has_permissions(administrator=True)
     @commands.hybrid_command(
         name='criar_evento',
+        with_app_command=True,
         description='Cria o evento para o próximo jogo')
-    async def criar_evento(self, context: Context):
+    async def criar_evento(self, context: Context, _id=None):
+        if _id is None:
+            _id = "0"
+        else:
+            _id = str(_id)
+
         info = utils.read_config()
         if info is None:
             emb = Embed(color=FAIL_COLOR)
-            emb.add_field(
-                name='Estado', value='Não existe informação para criar o evento. Corre /atualizar_info para buscar o próximo jogo.')
+            emb.add_field(name='',
+                          value='Não existe informação para criar o evento.')
+            await context.send(embed=emb)
+            return
+        try:
+            info = info[_id]
+        except KeyError:
+            emb = Embed(color=FAIL_COLOR)
+            emb.add_field(name='',
+                          value='Erro ao encontrar id do evento.')
             await context.send(embed=emb)
             return
 
-        info = info['next_match']
         with open(f"{os.path.realpath(os.path.dirname(__file__))}/../config.json") as file:
             config = json.load(file)
 
@@ -107,13 +122,60 @@ class Comandos(commands.Cog, name="comandos"):
                                                           location=nome_canal)
         except TypeError:
             emb = Embed(color=FAIL_COLOR)
-            emb.add_field(name='Estado', value='Erro ao criar o evento.')
+            emb.add_field(name='', value='Erro ao criar o evento!')
             await context.send(embed=emb)
             return
 
         emb = Embed(color=SUCCESS_COLOR)
-        emb.add_field(name='Estado', value='Evento criado com sucesso.')
+        emb.add_field(
+            name='', value=f'Evento criado com sucesso!\n{_status.url}')
 
+        await context.send(embed=emb)
+
+
+
+    @commands.has_permissions(administrator=True)
+    @commands.hybrid_command(
+        name='evento_personalizado',
+        with_app_command=True)
+    async def evento_personalizado(self, context: Context, title, \
+                                    _datetime, competition='N/A', stadium='N/A', tv='N/A'):
+        with open(f"{os.path.realpath(os.path.dirname(__file__))}/../config.json") as file:
+            config = json.load(file)
+        try:
+            inicio_jogo = datetime.strptime(_datetime, '%Y-%m-%d %H:%M')
+        except ValueError:
+            emb = Embed(color=FAIL_COLOR)
+            emb.add_field(name='',
+                          value='Formato de data e hora inválidas.')
+            await context.send(embed=emb)
+            return
+        
+        inicio_jogo = inicio_jogo.astimezone(tz=ZoneInfo(config['timezone']))
+        fim_jogo = inicio_jogo + timedelta(hours=2)
+
+        descricao = f"🏆 {competition}\n🏟️ {stadium}\n📺 {tv}"
+        
+        _guild = context.guild
+
+        try:
+            _status = await _guild.create_scheduled_event(name=title,
+                                                          description=descricao,
+                                                          start_time=inicio_jogo,
+                                                          end_time=fim_jogo,
+                                                          privacy_level=PrivacyLevel.guild_only,
+                                                          entity_type=EntityType.external,
+                                                          location="A definir")
+        except TypeError:
+            emb = Embed(color=FAIL_COLOR)
+            emb.add_field(name='', value='Erro ao criar o evento!')
+            await context.send(embed=emb)
+            return
+        
+        emb = Embed(color=SUCCESS_COLOR)
+        emb.add_field(
+            name='', value=f'Evento criado com sucesso!\n{_status.url}')
+        
         await context.send(embed=emb)
 
 

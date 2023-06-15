@@ -1,0 +1,5 @@
+beautifulsoup4==4.12.2
+discord.py==2.2.3
+Pillow==9.5.0
+Requests==2.31.0
+selenium==4.9.1

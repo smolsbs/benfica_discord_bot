@@ -12,7 +12,7 @@ def read_config() -> dict:
         fp = open(DB_FILE, 'r', encoding='utf-8')
     except FileNotFoundError:
         return None
-    
+
     cfg = json.load(fp)
     fp.close()
     return cfg
@@ -21,7 +21,7 @@ def write_config(data: dict) -> bool:
     with open(DB_FILE, 'w', encoding='utf-8') as fp:
         serial_json = json.dumps(data)
         fp.write(serial_json)
-    
+
     return True
 
 
