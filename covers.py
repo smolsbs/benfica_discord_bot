@@ -33,12 +33,13 @@ def sports_covers():
     This script should return links to the covers of the newspapers in jornais tuple
     :return: https://ia.imgs.sapo.pt/...
     """
-    jornais = ('A Bola', 'O Jogo', 'Record')
+    jornais = ('O Jogo', 'Record')
 
     pictures = _get_pictures()
 
-    covers = _filter_pictures(pictures, jornais)
-
+    # add the A Bola url since it's a static one to today's main page
+    covers = ["https://www.abola.pt//wqui/wfotosdia/newsstand.png"]
+    covers += _filter_pictures(pictures, jornais)
     return create_collage(covers)
 
 
