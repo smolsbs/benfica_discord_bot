@@ -24,19 +24,37 @@ H = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Fir
      'Referer': 'https://www.slbenfica.pt/pt-pt/futebol/calendario',
      'Content-Type': 'application/json'}
 
-DATA = "{\"filters\":{\"Menu\":\"next\",\"Modality\":\"{ECCFEB41-A0FD-4830-A3BB-7E57A0A15D00}\",\"IsMaleTeam\":true,\"Rank\":\"16094ecf-9e78-4e3e-bcdf-28e4f765de9f\",\"Tournaments\":[\"dp:tournament:50d243c9-fee7-4b34-bdcc-22bf446935eb\",\"sr:tournament:853\",\"sr:tournament:7\",\"sr:tournament:238\",\"sr:tournament:327\",\"sr:tournament:336\"],\"Seasons\":[\"2022/23\"],\"PageNumber\":0}}"
+DATA = '{"filters":{"Menu":"next","Modality":"{ECCFEB41-A0FD-4830-A3BB-7E57A0A15D00}","IsMaleTeam":true,"Rank":"16094ecf-9e78-4e3e-bcdf-28e4f765de9f","Tournaments":["sr:tournament:853","sr:tournament:7","sr:tournament:238","sr:tournament:345","sr:tournament:327"],"Seasons":["2023/24"],"PageNumber":0}}'
 
+DATA_WOMEN = '{"filters":{"Menu":"next","Modality":"{37A610A0-2CCD-4F89-A589-A1F995F8FCB5}","IsMaleTeam":false,"Rank":"16094ecf-9e78-4e3e-bcdf-28e4f765de9f","Tournaments":[],"Seasons":["2023/24"],"PageNumber":0}}'
 # Functions
 
 
 def req_get_next_match() -> str:
+    games = req_get_next_match_helper(DATA)
+    games += req_get_next_match_helper(DATA_WOMEN)
+
+    games_dic = {idx: game for idx,game in enumerate(games)}
+
+    ret = utils.write_config(games_dic)
+    if ret:
+        n_games = len(games_dic)
+        games_list = ""
+        for k,v in games_dic.items():
+            games_list += f"\n{k}: {v['homeTeam']} - {v['awayTeam']} "
+
+        return f"{n_games} novo(s) jogo(s) disponível(eis).{games_list}"
+    return 'Nenhum jogo novo encontrado'
+
+
+def req_get_next_match_helper(squad: str) -> list:
     s = requests.Session()
-    conts = s.request('POST', URL, headers=H, data=DATA)
+    conts = s.request('POST', URL, headers=H, data=squad)
     soup = BeautifulSoup(conts.content.decode(
         'utf-8', 'ignore'), 'html.parser')
     match_div = soup.find_all('div', {'class': 'calendar-item'})
 
-    info_dic = {}
+    info_dic = []
     for i, match in enumerate(match_div):
 
         checker = match.find('div', {'class': 'calendar-match-hour'}).text
@@ -45,6 +63,10 @@ def req_get_next_match() -> str:
 
         s_date = match.find('div', {'class': 'startDateForCalendar'}).text
         match_date = datetime.strptime(s_date, r"%m/%d/%Y %I:%M:%S %p")
+        try:
+            squad_type = match.find('div', {'class': 'calendar-squad-type'}).text.lower()
+        except AttributeError:
+            squad_type = None
 
         loc = match.find(
             'div', {'class': 'calendar-match-location'}).text
@@ -52,7 +74,7 @@ def req_get_next_match() -> str:
             'div', {'class': 'calendar-live-channels'})
         try:
             canal = aux.img['src'].split('/')[-1]
-        except AttributeError:
+        except (AttributeError, TypeError):
             canal = 'N/A'
 
         comp = match.find(
@@ -66,24 +88,17 @@ def req_get_next_match() -> str:
             'tv': canal,
             'competition': comp,
             'stadium': loc,
-            'homeTeam': home,
-            'awayTeam': away,
+            'homeTeam': f"{home}{' (F)' if squad_type == 'feminino' else ''}",
+            'awayTeam': f"{away}{' (F)' if squad_type == 'feminino' else ''}",
             'year': str(match_date.year),
             'month': str(match_date.month),
             'day': str(match_date.day),
             'hour': str(match_date.hour),
             'minute': str(match_date.minute)
         }
-        info_dic[i] = info
+        info_dic.append(info)
 
-    print(info_dic)
-    ret = utils.write_config(info_dic)
-    if ret:
-        jogos = len(info_dic)
-
-        return f"{jogos} novo(s) jogo(s) adicionado(s)"
-    return ret
-
+    return info_dic
 
 def fetch_config_next_match() -> datetime:
     cfg = utils.read_conf('next_match')
