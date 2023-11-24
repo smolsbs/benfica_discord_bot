@@ -9,6 +9,7 @@ import os
 
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from time import sleep
 
 
 from discord import (File, Embed, EntityType,
@@ -72,9 +73,53 @@ class Comandos(commands.Cog, name="comandos"):
 
     @commands.has_permissions(administrator=True)
     @commands.hybrid_command(
+        name='criar_eventos',
+        with_app_command=True,
+        description='Cria uma lista de eventos pelos ids, separados por ","')
+    async def criar_eventos(self, context: Context, _ids:str):
+        events = _ids.split(',')
+        await context.defer()
+
+        info = utils.read_config()
+        if info is None:
+            emb = Embed(color=FAIL_COLOR)
+            emb.add_field(name='',
+                          value='Não existe informação para criar o evento.')
+            await context.send(embed=emb)
+            return
+
+        _guild = context.guild
+
+        for ev in events:
+            match_info = info[ev]
+            match = next_match.make_event_helper(match_info)
+
+            try:
+                await _guild.create_scheduled_event(name=match[0],
+                                                  description=match[1],
+                                                  start_time=match[3],
+                                                  end_time=match[4],
+                                                  privacy_level=PrivacyLevel.guild_only,
+                                                  entity_type=EntityType.external,
+                                                  location=match[2])
+            except TypeError:
+                emb = Embed(color=FAIL_COLOR)
+                emb.add_field(name='', value='Erro ao criar o evento!')
+                await context.reply(embed=emb)
+                return
+            sleep(2)
+
+        emb = Embed(color=SUCCESS_COLOR)
+        emb.add_field(name='', value='Eventos criados')
+        await context.reply(embed=emb)
+        return
+
+
+    @commands.has_permissions(administrator=True)
+    @commands.hybrid_command(
         name='criar_evento',
         with_app_command=True,
-        description='Cria o evento para o próximo jogo')
+            description='Cria o evento para o próximo jogo')
     async def criar_evento(self, context: Context, _id=None):
         if _id is None:
             _id = "0"
@@ -88,6 +133,8 @@ class Comandos(commands.Cog, name="comandos"):
                           value='Não existe informação para criar o evento.')
             await context.send(embed=emb)
             return
+
+        await context.defer()
         try:
             info = info[_id]
         except KeyError:
@@ -97,87 +144,25 @@ class Comandos(commands.Cog, name="comandos"):
             await context.send(embed=emb)
             return
 
-        with open(f"{os.path.realpath(os.path.dirname(__file__))}/../config.json") as file:
-            config = json.load(file)
-
-        nome_evento = f"{info['homeTeam']} Vs. {info['awayTeam']}"
-        descricao = f"🏆 {info['competition']}\n🏟️ {info['stadium']}\n📺 {info['tv']}"
-        nome_canal = f"#{utils.sanitize_str(info['homeTeam'])}_vs_{utils.sanitize_str(info['awayTeam'])}"
-        inicio_jogo = datetime(year=int(info['year']),
-                               month=int(info['month']),
-                               day=int(info['day']),
-                               hour=int(info['hour']),
-                               minute=int(info['minute']),
-                               tzinfo=ZoneInfo('Europe/Lisbon'))
-        inicio_jogo = inicio_jogo.astimezone(tz=ZoneInfo(config['timezone']))
-        fim_jogo = inicio_jogo + timedelta(hours=2)
         _guild = context.guild
+        match = next_match.make_event_helper(info)
+
         try:
-            _status = await _guild.create_scheduled_event(name=nome_evento,
-                                                          description=descricao,
-                                                          start_time=inicio_jogo,
-                                                          end_time=fim_jogo,
+            _status = await _guild.create_scheduled_event(name=match[0],
+                                                          description=match[1],
+                                                          start_time=match[3],
+                                                          end_time=match[4],
                                                           privacy_level=PrivacyLevel.guild_only,
                                                           entity_type=EntityType.external,
-                                                          location=nome_canal)
+                                                          location=match[2])
         except TypeError:
             emb = Embed(color=FAIL_COLOR)
             emb.add_field(name='', value='Erro ao criar o evento!')
-            await context.send(embed=emb)
+            await context.reply(embed=emb)
             return
 
-        emb = Embed(color=SUCCESS_COLOR)
-        emb.add_field(
-            name='', value=f'Evento criado com sucesso!\n{_status.url}')
-
-        await context.send(embed=emb)
-
-
-
-    @commands.has_permissions(administrator=True)
-    @commands.hybrid_command(
-        name='evento_personalizado',
-        with_app_command=True)
-    async def evento_personalizado(self, context: Context, title, \
-                                    _datetime, competition='N/A', stadium='N/A', tv='N/A'):
-        with open(f"{os.path.realpath(os.path.dirname(__file__))}/../config.json") as file:
-            config = json.load(file)
-        try:
-            inicio_jogo = datetime.strptime(_datetime, '%Y-%m-%d %H:%M')
-        except ValueError:
-            emb = Embed(color=FAIL_COLOR)
-            emb.add_field(name='',
-                          value='Formato de data e hora inválidas.')
-            await context.send(embed=emb)
-            return
-        
-        inicio_jogo = inicio_jogo.astimezone(tz=ZoneInfo(config['timezone']))
-        fim_jogo = inicio_jogo + timedelta(hours=2)
-
-        descricao = f"🏆 {competition}\n🏟️ {stadium}\n📺 {tv}"
-        
-        _guild = context.guild
-
-        try:
-            _status = await _guild.create_scheduled_event(name=title,
-                                                          description=descricao,
-                                                          start_time=inicio_jogo,
-                                                          end_time=fim_jogo,
-                                                          privacy_level=PrivacyLevel.guild_only,
-                                                          entity_type=EntityType.external,
-                                                          location="A definir")
-        except TypeError:
-            emb = Embed(color=FAIL_COLOR)
-            emb.add_field(name='', value='Erro ao criar o evento!')
-            await context.send(embed=emb)
-            return
-        
-        emb = Embed(color=SUCCESS_COLOR)
-        emb.add_field(
-            name='', value=f'Evento criado com sucesso!\n{_status.url}')
-        
-        await context.send(embed=emb)
-
+        event_url = f"{_status.url}"
+        await context.reply(content=event_url)
 
 async def setup(bot):
     await bot.add_cog(Comandos(bot))

@@ -1,8 +1,13 @@
 # imports
 from datetime import datetime, timedelta
 
+import os
+import json
 import requests
+
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from helpers import utils
 
@@ -24,11 +29,29 @@ H = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Fir
      'Referer': 'https://www.slbenfica.pt/pt-pt/futebol/calendario',
      'Content-Type': 'application/json'}
 
-DATA = '{"filters":{"Menu":"next","Modality":"{ECCFEB41-A0FD-4830-A3BB-7E57A0A15D00}","IsMaleTeam":true,"Rank":"16094ecf-9e78-4e3e-bcdf-28e4f765de9f","Tournaments":["sr:tournament:853","sr:tournament:7","sr:tournament:238","sr:tournament:345","sr:tournament:327"],"Seasons":["2023/24"],"PageNumber":0}}'
+DATA = '{"filters":{"Menu":"next","Modality":"{ECCFEB41-A0FD-4830-A3BB-7E57A0A15D00}","IsMaleTeam":true,"Rank":"16094ecf-9e78-4e3e-bcdf-28e4f765de9f","Tournaments":["sr:tournament:853","sr:tournament:7","sr:tournament:238","sr:tournament:345","sr:tournament:327","sr:tournament:336"],"Seasons":["2023/24"],"PageNumber":0}}'
 
 DATA_WOMEN = '{"filters":{"Menu":"next","Modality":"{37A610A0-2CCD-4F89-A589-A1F995F8FCB5}","IsMaleTeam":false,"Rank":"16094ecf-9e78-4e3e-bcdf-28e4f765de9f","Tournaments":[],"Seasons":["2023/24"],"PageNumber":0}}'
 # Functions
 
+def make_event_helper(match):
+    with open(f"{os.path.realpath(os.path.dirname(__file__))}/../config.json") as file:
+        config = json.load(file)
+
+    nome_evento = f"{match['homeTeam']} Vs. {match['awayTeam']}"
+
+    descricao = f"🏆 {match['competition']}\n🏟️ {match['stadium']}\n📺 {match['tv']}"
+    nome_canal = f"#{utils.sanitize_str(match['homeTeam'])}_vs_{utils.sanitize_str(match['awayTeam'])}"
+    inicio_jogo = datetime(year=int(match['year']),
+                           month=int(match['month']),
+                           day=int(match['day']),
+                           hour=int(match['hour']),
+                           minute=int(match['minute']),
+                           tzinfo=ZoneInfo('Europe/Lisbon'))
+    inicio_jogo = inicio_jogo.astimezone(tz=ZoneInfo(config['timezone']))
+    fim_jogo = inicio_jogo + timedelta(hours=2)
+
+    return [nome_evento, descricao, nome_canal, inicio_jogo, fim_jogo];
 
 def req_get_next_match() -> str:
     games = req_get_next_match_helper(DATA)
